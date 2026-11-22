@@ -20,10 +20,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Restaurar keystore de firma de depuración
+      - name: Configurar keystore de firma de depuración
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
-          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "$DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > debug.keystore
+            echo "Keystore restaurado desde GitHub Secret."
+          elif [ -f debug.keystore.base64 ]; then
+            tr -d '[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore
+            echo "Keystore restaurado desde debug.keystore.base64."
+          elif [ ! -f debug.keystore ]; then
+            echo "::warning::Usando keystore temporal; configura DEBUG_KEYSTORE_BASE64 en GitHub Secrets para habilitar Google Sign-In."
+            keytool -genkeypair -noprompt -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Configurar Gradle 9.3.1
