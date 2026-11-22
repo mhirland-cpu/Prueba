@@ -1,0 +1,64 @@
+name: Generar APK de Arreglos Visita
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restaurar keystore de firma de depuración
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+      - name: Configurar Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Aceptar licencias Android SDK
+        run: |
+          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ -x "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          fi
+
+      - name: Compilar APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Preparar archivo APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Arreglos_Visita.apk
+
+      - name: Subir artefacto APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arreglos_Visita_APK
+          path: Arreglos_Visita.apk
+
+      - name: Publicar APK directo en Releases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest Arreglos_Visita.apk --clobber
+          else
+            gh release create latest Arreglos_Visita.apk \
+              --title "Arreglos Visita (APK)" \
+              --notes "Descarga e instala Arreglos_Visita.apk directamente en Android."
+          fi
