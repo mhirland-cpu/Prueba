@@ -51,6 +51,7 @@ import com.example.ui.screens.SharedCollabEditorInfo
 import com.example.ui.screens.SharedHomeTab
 import com.example.ui.theme.MyApplicationTheme
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -90,17 +91,26 @@ private fun ArreglosAppContent() {
   val scope = rememberCoroutineScope()
   val credentialManager = remember(context) { CredentialManager.create(context) }
 
-  val auth = remember { Firebase.auth }
-  val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+  val isFirebaseConfigured = remember(context) { FirebaseApp.getApps(context).isNotEmpty() }
+  val auth = remember(isFirebaseConfigured) {
+    if (isFirebaseConfigured) Firebase.auth else null
+  }
+  val currentUser by if (auth != null) {
+    auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+  } else {
+    remember { mutableStateOf<FirebaseUser?>(null) }
+  }
 
-  LaunchedEffect(Unit) {
-    attemptAutoSignIn(
-      context = context,
-      credentialManager = credentialManager,
-      onAuthSuccess = {},
-      onUnauthenticated = {},
-      scope = scope,
-    )
+  LaunchedEffect(isFirebaseConfigured) {
+    if (isFirebaseConfigured) {
+      attemptAutoSignIn(
+        context = context,
+        credentialManager = credentialManager,
+        onAuthSuccess = {},
+        onUnauthenticated = {},
+        scope = scope,
+      )
+    }
   }
 
   val localViewModel: MainViewModel = viewModel()

@@ -38,6 +38,17 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Configurar Firebase (google-services.json)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json restaurado desde GitHub Secret."
+          elif [ ! -f app/google-services.json ]; then
+            echo "::warning::app/google-services.json no encontrado; configura GOOGLE_SERVICES_JSON en GitHub Secrets para habilitar Colaborar en línea."
+          fi
+
       - name: Configurar Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
