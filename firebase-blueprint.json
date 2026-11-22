@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "SharedArreglo": {
+      "title": "SharedArreglo",
+      "description": "Metadatos del arreglo colaborativo de visita: propietario, miembros autorizados por código, congregación, fechas y último editor.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "UID del usuario creador del arreglo compartido."
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "Nombre visible del creador del arreglo."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Lista acotada (máximo 10) de UIDs de colaboradores con acceso al arreglo."
+        },
+        "memberNames": {
+          "type": "object",
+          "description": "Mapa de UID a nombre visible de cada participante."
+        },
+        "congregacion": {
+          "type": "string",
+          "description": "Nombre de la congregación para identificar el arreglo."
+        },
+        "fechaVisita": {
+          "type": "string",
+          "description": "Rango de fechas de la visita en español."
+        },
+        "lastEditedByUid": {
+          "type": "string",
+          "description": "UID del último colaborador que guardó cambios."
+        },
+        "lastEditedByName": {
+          "type": "string",
+          "description": "Nombre del último colaborador que guardó cambios."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Marca temporal del servidor al crear el documento (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Marca temporal del servidor de la última actualización (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "ownerId",
+        "ownerName",
+        "memberUids",
+        "memberNames",
+        "congregacion",
+        "fechaVisita",
+        "lastEditedByUid",
+        "lastEditedByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SharedArregloSection": {
+      "title": "SharedArregloSection",
+      "description": "Sección independiente del formulario (actividades, servicioPastoreo, servicioEsposa o notaPastoreo) para edición colaborativa sin conflictos.",
+      "type": "object",
+      "properties": {
+        "sectionType": {
+          "type": "string",
+          "enum": [
+            "actividades",
+            "servicioPastoreo",
+            "servicioEsposa",
+            "notaPastoreo"
+          ],
+          "description": "Identificador de la sección que coincide con el ID del documento."
+        },
+        "lastEditedByUid": {
+          "type": "string",
+          "description": "UID del último colaborador que editó esta sección."
+        },
+        "lastEditedByName": {
+          "type": "string",
+          "description": "Nombre del último colaborador que editó esta sección."
+        },
+        "payload": {
+          "type": "object",
+          "description": "Mapa nativo con los campos de la sección del formulario."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Marca temporal del servidor de la última actualización (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "sectionType",
+        "lastEditedByUid",
+        "lastEditedByName",
+        "payload",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/shared_arreglos/{arregloId}": {
+      "schema": {
+        "$ref": "#/entities/SharedArreglo"
+      },
+      "description": "Arreglos de visita compartidos en tiempo real entre el creador y colaboradores invitados mediante código."
+    },
+    "/shared_arreglos/{arregloId}/sections/{sectionId}": {
+      "schema": {
+        "$ref": "#/entities/SharedArregloSection"
+      },
+      "description": "Subcolección con las 4 secciones independientes del formulario para edición simultánea sin sobrescrituras."
+    }
+  }
+}

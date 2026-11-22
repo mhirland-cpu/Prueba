@@ -1,0 +1,6 @@
+{
+  "name": "Arreglos Visita",
+  "description": "Aplicación offline para llenar el formulario de visita del superintendente de circuito, guardar borradores y generar el PDF exacto para compartir por WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,292 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 6 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidSharedArreglo(data) {
+      return data.size() == 10 &&
+             data.keys().hasAll([
+               'ownerId', 'ownerName', 'memberUids', 'memberNames',
+               'congregacion', 'fechaVisita',
+               'lastEditedByUid', 'lastEditedByName',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'ownerId', 'ownerName', 'memberUids', 'memberNames',
+               'congregacion', 'fechaVisita',
+               'lastEditedByUid', 'lastEditedByName',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 10 &&
+             data.memberUids[0] is string &&
+             data.ownerId in data.memberUids &&
+             data.memberNames is map && data.memberNames.size() >= 1 && data.memberNames.size() <= 10 &&
+             data.congregacion is string && data.congregacion.size() <= 200 &&
+             data.fechaVisita is string && data.fechaVisita.size() <= 200 &&
+             data.lastEditedByUid is string && data.lastEditedByUid.size() >= 1 && data.lastEditedByUid.size() <= 128 &&
+             data.lastEditedByName is string && data.lastEditedByName.size() >= 1 && data.lastEditedByName.size() <= 100 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isJoinAction() {
+      return !(request.auth.uid in existing().memberUids) &&
+             existing().memberUids.size() < 10 &&
+             request.auth.uid in incoming().memberUids &&
+             incoming().memberUids.hasAll(existing().memberUids) &&
+             incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+             incoming().memberNames.diff(existing().memberNames).affectedKeys().hasOnly([request.auth.uid]) &&
+             incoming().memberNames[request.auth.uid] is string &&
+             incoming().memberNames[request.auth.uid].size() >= 1 &&
+             incoming().memberNames[request.auth.uid].size() <= 100 &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'memberNames', 'updatedAt']);
+    }
+
+    function isLeaveAction() {
+      return request.auth.uid in existing().memberUids &&
+             request.auth.uid != existing().ownerId &&
+             !(request.auth.uid in incoming().memberUids) &&
+             existing().memberUids.hasAll(incoming().memberUids) &&
+             incoming().memberUids.size() == existing().memberUids.size() - 1 &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']);
+    }
+
+    function isMemberMetaUpdate() {
+      return request.auth.uid in existing().memberUids &&
+             incoming().lastEditedByUid == request.auth.uid &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'congregacion', 'fechaVisita',
+               'lastEditedByUid', 'lastEditedByName', 'updatedAt'
+             ]);
+    }
+
+    function isValidDaySchedule(d) {
+      return d is map &&
+             d.size() == 9 &&
+             d.keys().hasOnly([
+               'salidaAmLugar', 'salidaAmHora',
+               'salidaPmLugar', 'salidaPmHora',
+               'almuerzoFamilia', 'almuerzoTel',
+               'reunionPrecursoresEnabled', 'reunionPrecursoresLugar', 'reunionPrecursoresHora'
+             ]) &&
+             d.salidaAmLugar is string && d.salidaAmLugar.size() <= 200 &&
+             d.salidaAmHora is string && d.salidaAmHora.size() <= 50 &&
+             d.salidaPmLugar is string && d.salidaPmLugar.size() <= 200 &&
+             d.salidaPmHora is string && d.salidaPmHora.size() <= 50 &&
+             d.almuerzoFamilia is string && d.almuerzoFamilia.size() <= 200 &&
+             d.almuerzoTel is string && d.almuerzoTel.size() <= 50 &&
+             d.reunionPrecursoresEnabled is bool &&
+             d.reunionPrecursoresLugar is string && d.reunionPrecursoresLugar.size() <= 200 &&
+             d.reunionPrecursoresHora is string && d.reunionPrecursoresHora.size() <= 50;
+    }
+
+    function isValidActividades(a) {
+      return a is map &&
+             a.size() == 19 &&
+             a.keys().hasOnly([
+               'fecha', 'congregacion',
+               'miercoles', 'jueves', 'viernes', 'sabado',
+               'reunionAncianosLugar', 'reunionAncianosHora',
+               'domingoSalidaAmLugar', 'domingoSalidaAmHora',
+               'domingoAlmuerzoFamilia', 'domingoAlmuerzoTel',
+               'domingoReunionPrecursoresEnabled', 'domingoReunionPrecursoresLugar', 'domingoReunionPrecursoresHora',
+               'reunionVidaMinisterioDia', 'reunionVidaMinisterioHora',
+               'reunionDiscursoAtalayaDia', 'reunionDiscursoAtalayaHora'
+             ]) &&
+             a.fecha is string && a.fecha.size() <= 200 &&
+             a.congregacion is string && a.congregacion.size() <= 200 &&
+             isValidDaySchedule(a.miercoles) &&
+             isValidDaySchedule(a.jueves) &&
+             isValidDaySchedule(a.viernes) &&
+             isValidDaySchedule(a.sabado) &&
+             a.reunionAncianosLugar is string && a.reunionAncianosLugar.size() <= 200 &&
+             a.reunionAncianosHora is string && a.reunionAncianosHora.size() <= 50 &&
+             a.domingoSalidaAmLugar is string && a.domingoSalidaAmLugar.size() <= 200 &&
+             a.domingoSalidaAmHora is string && a.domingoSalidaAmHora.size() <= 50 &&
+             a.domingoAlmuerzoFamilia is string && a.domingoAlmuerzoFamilia.size() <= 200 &&
+             a.domingoAlmuerzoTel is string && a.domingoAlmuerzoTel.size() <= 50 &&
+             a.domingoReunionPrecursoresEnabled is bool &&
+             a.domingoReunionPrecursoresLugar is string && a.domingoReunionPrecursoresLugar.size() <= 200 &&
+             a.domingoReunionPrecursoresHora is string && a.domingoReunionPrecursoresHora.size() <= 50 &&
+             a.reunionVidaMinisterioDia is string && a.reunionVidaMinisterioDia.size() <= 100 &&
+             a.reunionVidaMinisterioHora is string && a.reunionVidaMinisterioHora.size() <= 50 &&
+             a.reunionDiscursoAtalayaDia is string && a.reunionDiscursoAtalayaDia.size() <= 100 &&
+             a.reunionDiscursoAtalayaHora is string && a.reunionDiscursoAtalayaHora.size() <= 50;
+    }
+
+    function isValidServicePastoringDay(d) {
+      return d is map &&
+             d.size() == 8 &&
+             d.keys().hasOnly([
+               'hora1Con', 'hora1Tel', 'hora1EstudioPastoreo', 'hora1Publicacion',
+               'hora2Con', 'hora2Tel', 'hora2EstudioPastoreo', 'hora2Publicacion'
+             ]) &&
+             d.hora1Con is string && d.hora1Con.size() <= 200 &&
+             d.hora1Tel is string && d.hora1Tel.size() <= 50 &&
+             d.hora1EstudioPastoreo is string && d.hora1EstudioPastoreo.size() <= 200 &&
+             d.hora1Publicacion is string && d.hora1Publicacion.size() <= 200 &&
+             d.hora2Con is string && d.hora2Con.size() <= 200 &&
+             d.hora2Tel is string && d.hora2Tel.size() <= 50 &&
+             d.hora2EstudioPastoreo is string && d.hora2EstudioPastoreo.size() <= 200 &&
+             d.hora2Publicacion is string && d.hora2Publicacion.size() <= 200;
+    }
+
+    function isValidServicioPastoreo(s) {
+      return s is map &&
+             s.size() == 5 &&
+             s.keys().hasOnly(['nombrePersona', 'miercoles', 'jueves', 'viernes', 'notasAdicionales']) &&
+             s.nombrePersona is string && s.nombrePersona.size() <= 200 &&
+             isValidServicePastoringDay(s.miercoles) &&
+             isValidServicePastoringDay(s.jueves) &&
+             isValidServicePastoringDay(s.viernes) &&
+             s.notasAdicionales is string && s.notasAdicionales.size() <= 2000;
+    }
+
+    function isValidServiceOnlyDay(d) {
+      return d is map &&
+             d.size() == 6 &&
+             d.keys().hasOnly([
+               'hora1Con', 'hora1Tel', 'hora1Publicacion',
+               'hora2Con', 'hora2Tel', 'hora2Publicacion'
+             ]) &&
+             d.hora1Con is string && d.hora1Con.size() <= 200 &&
+             d.hora1Tel is string && d.hora1Tel.size() <= 50 &&
+             d.hora1Publicacion is string && d.hora1Publicacion.size() <= 200 &&
+             d.hora2Con is string && d.hora2Con.size() <= 200 &&
+             d.hora2Tel is string && d.hora2Tel.size() <= 50 &&
+             d.hora2Publicacion is string && d.hora2Publicacion.size() <= 200;
+    }
+
+    function isValidServicioEsposa(s) {
+      return s is map &&
+             s.size() == 5 &&
+             s.keys().hasOnly(['nombrePersona', 'miercoles', 'jueves', 'viernes', 'notasAdicionales']) &&
+             s.nombrePersona is string && s.nombrePersona.size() <= 200 &&
+             isValidServiceOnlyDay(s.miercoles) &&
+             isValidServiceOnlyDay(s.jueves) &&
+             isValidServiceOnlyDay(s.viernes) &&
+             s.notasAdicionales is string && s.notasAdicionales.size() <= 2000;
+    }
+
+    function isValidNotaPastoreo(n) {
+      return n is map &&
+             n.size() == 11 &&
+             n.keys().hasOnly([
+               'visitaMiercolesPersona', 'visitaMiercolesSituacion',
+               'visitaJuevesPersona', 'visitaJuevesSituacion',
+               'visitaViernesPersona', 'visitaViernesSituacion',
+               'asunto1', 'asunto2', 'asunto3', 'asunto4', 'codigoPie'
+             ]) &&
+             n.visitaMiercolesPersona is string && n.visitaMiercolesPersona.size() <= 200 &&
+             n.visitaMiercolesSituacion is string && n.visitaMiercolesSituacion.size() <= 3000 &&
+             n.visitaJuevesPersona is string && n.visitaJuevesPersona.size() <= 200 &&
+             n.visitaJuevesSituacion is string && n.visitaJuevesSituacion.size() <= 3000 &&
+             n.visitaViernesPersona is string && n.visitaViernesPersona.size() <= 200 &&
+             n.visitaViernesSituacion is string && n.visitaViernesSituacion.size() <= 3000 &&
+             n.asunto1 is string && n.asunto1.size() <= 1500 &&
+             n.asunto2 is string && n.asunto2.size() <= 1500 &&
+             n.asunto3 is string && n.asunto3.size() <= 1500 &&
+             n.asunto4 is string && n.asunto4.size() <= 1500 &&
+             n.codigoPie is string && n.codigoPie.size() <= 50;
+    }
+
+    function isValidSection(sectionId, data) {
+      return data.size() == 5 &&
+             data.keys().hasAll(['sectionType', 'lastEditedByUid', 'lastEditedByName', 'payload', 'updatedAt']) &&
+             data.keys().hasOnly(['sectionType', 'lastEditedByUid', 'lastEditedByName', 'payload', 'updatedAt']) &&
+             data.sectionType == sectionId &&
+             data.lastEditedByUid is string && data.lastEditedByUid.size() >= 1 && data.lastEditedByUid.size() <= 128 &&
+             data.lastEditedByName is string && data.lastEditedByName.size() >= 1 && data.lastEditedByName.size() <= 100 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (
+               (sectionId == 'actividades' && isValidActividades(data.payload)) ||
+               (sectionId == 'servicioPastoreo' && isValidServicioPastoreo(data.payload)) ||
+               (sectionId == 'servicioEsposa' && isValidServicioEsposa(data.payload)) ||
+               (sectionId == 'notaPastoreo' && isValidNotaPastoreo(data.payload))
+             );
+    }
+
+    match /shared_arreglos/{arregloId} {
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+      allow get: if isSignedIn() && isValidId(arregloId) && request.auth.uid in resource.data.memberUids;
+
+      allow create: if isSignedIn() &&
+                       isValidId(arregloId) &&
+                       isValidSharedArreglo(incoming()) &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().lastEditedByUid == request.auth.uid &&
+                       incoming().memberUids.size() == 1 &&
+                       incoming().memberUids[0] == request.auth.uid &&
+                       incoming().memberNames.keys().hasOnly([request.auth.uid]) &&
+                       incoming().memberNames[request.auth.uid] is string &&
+                       incoming().memberNames[request.auth.uid].size() >= 1 &&
+                       incoming().memberNames[request.auth.uid].size() <= 100 &&
+                       existsAfter(/databases/$(database)/documents/shared_arreglos/$(arregloId)/sections/actividades) &&
+                       existsAfter(/databases/$(database)/documents/shared_arreglos/$(arregloId)/sections/servicioPastoreo) &&
+                       existsAfter(/databases/$(database)/documents/shared_arreglos/$(arregloId)/sections/servicioEsposa) &&
+                       existsAfter(/databases/$(database)/documents/shared_arreglos/$(arregloId)/sections/notaPastoreo);
+
+      allow update: if isSignedIn() &&
+                       isValidId(arregloId) &&
+                       isValidSharedArreglo(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().ownerName == existing().ownerName &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isJoinAction() || isLeaveAction() || isMemberMetaUpdate());
+
+      allow delete: if isSignedIn() &&
+                       isValidId(arregloId) &&
+                       resource.data.ownerId == request.auth.uid;
+
+      match /sections/{sectionId} {
+        allow list: if false;
+        allow get: if isSignedIn() &&
+                      isValidId(arregloId) &&
+                      sectionId in ['actividades', 'servicioPastoreo', 'servicioEsposa', 'notaPastoreo'] &&
+                      request.auth.uid in get(/databases/$(database)/documents/shared_arreglos/$(arregloId)).data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(arregloId) &&
+                         isValidSection(sectionId, incoming()) &&
+                         incoming().lastEditedByUid == request.auth.uid &&
+                         request.auth.uid == getAfter(/databases/$(database)/documents/shared_arreglos/$(arregloId)).data.ownerId;
+
+        allow update: if isSignedIn() &&
+                         isValidId(arregloId) &&
+                         isValidSection(sectionId, incoming()) &&
+                         incoming().sectionType == existing().sectionType &&
+                         incoming().lastEditedByUid == request.auth.uid &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'payload', 'lastEditedByUid', 'lastEditedByName', 'updatedAt'
+                         ]) &&
+                         request.auth.uid in get(/databases/$(database)/documents/shared_arreglos/$(arregloId)).data.memberUids;
+
+        allow delete: if isSignedIn() &&
+                         isValidId(arregloId) &&
+                         request.auth.uid == get(/databases/$(database)/documents/shared_arreglos/$(arregloId)).data.ownerId;
+      }
+    }
+  }
+}
